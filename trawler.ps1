@@ -803,6 +803,10 @@ function Test-OutputDirectoryPermissions(){
         Validates output directory exists and that current user has appropriate permissions to write files
     #>
     # if the output path doesn't exist, create it.
+    if ($csvfilename -ne "" -or $jsonfilename -ne ""){
+        return $true
+    }
+
     if (!(Test-Path $OutputLocation)) {
         try{
             New-Item $OutputLocation -Type Directory
@@ -18020,14 +18024,16 @@ function Emit-Detections {
         Called at the end of the execution flow to emit all detections in the various specified formats.
     #>
     # Emit detections in JSON format
-    $detection_list | ConvertTo-Json -Depth 4 | Out-File $script:JSONDetectionsPath.Path
+    try {
+        $detection_list | ConvertTo-Json -Depth 4 | Out-File $script:JSONDetectionsPath.Path
+    } catch {
+    }
 
     foreach ($det in $detection_list){
         #EVTX Output
         if ($evtx) {
             Write-DetectionToEVTX $det
         }
-
         # CSV Output
         $det.Meta = Format-MetadataToString($det.Meta)
         $det | Export-CSV $script:CSVDetectionsPath.Path -Append -NoTypeInformation -Encoding UTF8 -Force
