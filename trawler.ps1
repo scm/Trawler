@@ -74,9 +74,29 @@ param
 	$evtx,
 	[Parameter(
 		Mandatory = $false,
+		HelpMessage = 'Do not append timestamp to specified output filename')]
+	[switch]
+	$notimestamp,
+	[Parameter(
+		Mandatory = $false,
 		HelpMessage = 'The fully-qualified file-path of the snapshot to use for comparison - this should be a JSON file from a previous trawler execution')]
 	[string]
 	$snapshot,
+	[Parameter(
+		Mandatory = $false,
+		HelpMessage = 'File name to override defaults - if specified, overrides -outputlocation and both a CSV and JSON are generated at the specified path')]
+	[string]
+	$filename = "detections",
+	[Parameter(
+		Mandatory = $false,
+		HelpMessage = 'If specified, overrides output name for CSV')]
+	[string]
+	$csvfilename = "",
+	[Parameter(
+		Mandatory = $false,
+		HelpMessage = 'If specified, overrides output name for JSON')]
+	[string]
+	$jsonfilename = "",
 	[Parameter(
 		Mandatory = $false,
 		HelpMessage = 'The drive to target for analysis - for example, if mounting an imaged system as a second drive on an analysis device, specify via -drivetarget "D:" (PARTIALLY IMPLEMENTED)')]
@@ -813,11 +833,18 @@ function New-TrawlerOutputItem() {
 		[string]
 		$FileName,
         [string]
-        $FileType
+        $FileType,
+        [bool]
+        $skiptimestamp
 	)
 	$timestamp = [System.DateTimeOffset]::Now.ToUnixTimeSeconds()
+    $filepath = [System.IO.Path]::Combine($OutputLocation, "$($FileName)_$($timestamp).$($FileType.ToLower())")
+    if ($skiptimestamp) {
+        $filepath = [System.IO.Path]::Combine($OutputLocation, "$($FileName).$($FileType.ToLower())")
+    }
+
 	$output = [PSCustomObject]@{
-		Path = [System.IO.Path]::Combine($OutputLocation, "$($FileName)_$($timestamp).$($FileType.ToLower())")
+		Path = $filepath
 		CanWrite = $false
 	}
     #TODO - Review as this check should be unnecessary as we already validate write capabilities before this
@@ -17196,7 +17223,6 @@ function Check-ChromiumExtensions {
     # TODO - JavaScript content analysis
     # TODO - Hashing of extensions
     # TODO - Extension datetime created
-    # TODO - Extensions with permissions to high-risk sites (banking, etc)
 
     $critical_risk_hosts = @(
         "http://\*/\*"
@@ -17697,6 +17723,8 @@ function Write-Detection($det) {
         return
     }
 
+    $det | Add-Member -MemberType NoteProperty -Name PSComputerName -Value $env:COMPUTERNAME
+
 	$detection_list.Add($det) | Out-Null
 
 	switch ($det.Risk) {
@@ -18048,8 +18076,14 @@ function Main {
     }
 
     # Create detection output files
-    $script:JSONDetectionsPath = New-TrawlerOutputItem -FileName "detections" -FileType "json"
-    $script:CSVDetectionsPath = New-TrawlerOutputItem -FileName "detections" -FileType "csv"
+    $script:JSONDetectionsPath = New-TrawlerOutputItem -FileName $script:filename -FileType "json" -skiptimestamp $notimestamp
+    $script:CSVDetectionsPath = New-TrawlerOutputItem -FileName $script:filename -FileType "csv" -skiptimestamp $notimestamp
+    if ($jsonfilename -ne "") {
+        $script:JSONDetectionsPath.Path = $jsonfilename
+    }
+    if ($csvfilename -ne "") {
+        $script:CSVDetectionsPath.Path = $csvfilename
+    }
     Write-Message "Detection Output Files: $($script:JSONDetectionsPath.Path), $($script:CSVDetectionsPath.Path)"
 
     # Setting up required script-level variables
